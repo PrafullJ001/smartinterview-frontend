@@ -1,0 +1,423 @@
+
+
+
+import React, { useState, useRef, useEffect } from "react";
+import "bootstrap/dist/css/bootstrap.min.css";
+import { useNavigate } from "react-router-dom";
+import { getAIResults } from "../api/ai";
+
+/** @typedef {typeof window.SpeechRecognition | typeof window.webkitSpeechRecognition} SpeechRecognitionConstructor */
+
+const questionsData = {
+  frontend: [
+    { id: 1, question: "What is JSX in React?" },
+    { id: 2, question: "Explain the concept of React hooks and their benefits." },
+    { id: 3, question: "How does the Virtual DOM work in React?" },
+    { id: 4, question: "What is Flexbox used for in CSS?" },
+    { id: 5, question: "What are the benefits of using TypeScript over JavaScript?" },
+  ],
+  backend: [
+    { id: 1, question: "What is Node.js used for?" },
+    { id: 2, question: "What is the difference between SQL and NoSQL databases?" },
+    { id: 3, question: "What is a schema in MongoDB?" },
+    { id: 4, question: "Explain how JWT authentication works." },
+    { id: 5, question: "Explain how middleware works in Express.js." },
+  ],
+  datascience: [
+    { id: 1, question: "Explain the difference between supervised and unsupervised learning." },
+    { id: 2, question: "What is feature engineering and why is it important?" },
+    { id: 3, question: "Describe the bias-variance tradeoff in machine learning." },
+    { id: 4, question: "How do you handle missing data in a dataset?" },
+    { id: 5, question: "Explain the concept of cross-validation." },
+  ],
+  aiml: [
+    { id: 1, question: "Explain how a convolutional neural network works." },
+    { id: 2, question: "What is transfer learning and when would you use it?" },
+    { id: 3, question: "Describe the vanishing gradient problem and solutions." },
+    { id: 4, question: "What is the difference between RNN and LSTM?" },
+    { id: 5, question: "Explain how attention mechanisms work in transformers." },
+  ],
+  devops: [
+    { id: 1, question: "What is CI/CD and why is it important?" },
+    { id: 2, question: "Explain the concept of Infrastructure as Code (IaC)." },
+    { id: 3, question: "What is Docker and how does containerization work?" },
+    { id: 4, question: "Explain the difference between continuous delivery and continuous deployment." },
+    { id: 5, question: "What are Kubernetes pods, deployments, and services?" },
+  ],
+  cybersecurity: [
+    { id: 1, question: "What is the difference between encryption, hashing, and salting?" },
+    { id: 2, question: "Explain what SQL injection is and how to prevent it." },
+    { id: 3, question: "What is the CIA triad in cybersecurity?" },
+    { id: 4, question: "Explain the difference between symmetric and asymmetric encryption." },
+    { id: 5, question: "What is a firewall and how does it protect a network?" },
+  ],
+};
+
+// --- Helper function for word count (NO CHANGE) ---
+const getWordCount = (text) => {
+  if (!text) return 0;
+  // This regex splits by any whitespace character sequence
+  const words = text.trim().split(/\s+/);
+  // Filter out empty strings that might result from multiple spaces or leading/trailing spaces
+  return words.filter(word => word.length > 0).length;
+};
+
+export default function QAPage_temp({ role, onComplete }) {
+  const navigate = useNavigate();
+
+  // 🟢 Clear old interview data at the start
+  useEffect(() => {
+    localStorage.removeItem("tempInterviewData");
+    localStorage.removeItem("tempInterviewRole");
+    localStorage.removeItem("interviewId");
+  }, []);
+
+  if (!role || role === "") {
+    // ... (Role selection error block - NO CHANGE) ...
+    return (
+      <div
+        className="d-flex flex-column justify-content-center align-items-center vh-100 text-center"
+        style={{
+          background: "linear-gradient(135deg, #e3f2fd 0%, #e8eaf6 100%)",
+        }}
+      >
+        <div className="card shadow-lg p-5 border-0">
+          <h3 className="text-danger mb-3">⚠️ Please Select The Role</h3>
+          <p className="lead text-secondary mb-4">
+            Go to the **Role Selection** page to start your interview practice.
+          </p>
+          <button
+            onClick={() => navigate("/roles")}
+            className="btn btn-primary btn-lg"
+            style={{
+              background: "linear-gradient(90deg, #2196F3, #21CBF3)",
+              border: "none",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => (e.target.style.transform = "scale(1.08)")}
+            onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+          >
+            ⬅ Back to Role Selection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const questions = questionsData[role] || questionsData.frontend;
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState(new Array(questions.length).fill(""));
+  const [showValidation, setShowValidation] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const recognitionRef = useRef(null);
+  const MIN_WORDS = 10; // 🎯 CHANGE 1: Minimum word count set to 10
+
+  // Speech Recognition setup 
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const newAnswers = [...answers];
+        newAnswers[currentQuestion] = (newAnswers[currentQuestion] + " " + transcript).trim();
+        setAnswers(newAnswers);
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsRecording(false);
+        alert(`Speech Recognition Error: ${event.error}`);
+      };
+
+      recognition.onend = () => {
+        if (isRecording) {
+            setIsRecording(false);
+        }
+      };
+      
+      recognitionRef.current = recognition;
+    } else {
+      console.warn("Speech recognition not supported in this browser.");
+    }
+  }, [answers, currentQuestion, isRecording]);
+
+
+  // 🎯 CHANGE 2: Toggle start/stop on a single click
+  const toggleRecording = () => {
+    const recognition = recognitionRef.current;
+    if (!recognition) {
+      alert("Speech recognition not supported in your browser.");
+      return;
+    }
+
+    if (isRecording) {
+      // 2nd click: Stop recording
+      recognition.stop();
+      setIsRecording(false); // Update state to reflect stop
+    } else {
+      // 1st click: Start recording
+      try {
+        recognition.start();
+        setIsRecording(true); // Update state to reflect start
+        setShowValidation(false);
+      } catch (err) {
+        if (err.name === "InvalidStateError") {
+          // Attempt to stop/restart if already starting or active
+          recognition.stop();
+          setTimeout(() => {
+             try {
+                recognition.start();
+                setIsRecording(true);
+             } catch (e) {
+                console.error("Restart failed", e);
+             }
+          }, 300);
+        } else {
+          console.error(err);
+        }
+      }
+    }
+  };
+
+  const speakQuestion = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(questions[currentQuestion].question);
+      utterance.lang = "en-US";
+      utterance.rate = 0.9;
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    } else alert("Text-to-speech is not supported in your browser.");
+  };
+
+  const handleAnswerChange = (value) => {
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = value;
+    setAnswers(newAnswers);
+    setShowValidation(false);
+  };
+
+  const validateAnswer = () => {
+    const currentAnswer = answers[currentQuestion].trim();
+    if (currentAnswer === "") {
+      return "Please provide an answer before proceeding.";
+    }
+    // Updated check to use the new MIN_WORDS value (10)
+    if (getWordCount(currentAnswer) < MIN_WORDS) {
+      return `Answer must contain a minimum of ${MIN_WORDS} words. Current count: ${getWordCount(currentAnswer)}`;
+    }
+    return null;
+  };
+
+  const handleNext = () => {
+    const validationError = validateAnswer();
+    if (validationError) {
+      setShowValidation(true);
+      return;
+    }
+
+    if (currentQuestion < questions.length - 1) {
+      if (isRecording) recognitionRef.current?.stop();
+      setCurrentQuestion((prev) => prev + 1);
+      setShowValidation(false);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentQuestion > 0) {
+      if (isRecording) recognitionRef.current?.stop();
+      setCurrentQuestion((prev) => prev - 1);
+      setShowValidation(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    const validationError = validateAnswer();
+    if (validationError) {
+      setShowValidation(true);
+      return;
+    }
+
+    if (isRecording) recognitionRef.current?.stop();
+
+    if (isSubmitting) {
+        console.warn("Submission already in progress. Skipping.");
+        return;
+    }
+    setIsSubmitting(true);
+
+    const interviewData = questions.map((q, index) => ({
+      question: q.question,
+      answer: answers[index],
+    }));
+
+    const userId = "temp_user_id_12345";
+
+    if (!role || !userId || interviewData.length === 0) {
+      console.error("Critical submission data missing:", { userId, role, interviewDataLength: interviewData.length });
+      alert("Cannot submit: Role, User ID, or Answers are missing.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await getAIResults(userId, role, interviewData);
+      
+      localStorage.setItem("tempInterviewData", JSON.stringify(interviewData));
+      localStorage.setItem("tempInterviewRole", role);
+
+      navigate("/result");
+      
+      if (typeof onComplete === "function") {
+        onComplete(interviewData, questions.length);
+      }
+      
+    } catch (error) {
+      console.error("❌ Interview submission failed. Server Error:", error.message);
+      alert(`Failed to submit interview. Please check the console. Error: ${error.message}`);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  const wordCount = getWordCount(answers[currentQuestion]);
+  const validationMessage = validateAnswer();
+
+  return (
+    <div
+      className="min-vh-100"
+      style={{ background: "linear-gradient(135deg, #E3F2FD 0%, #E8EAF6 100%)" }}
+    >
+      <header className="bg-white shadow-sm">
+        <div className="container py-3">
+          <h5 className="text-primary mb-0">🚀 AI-Powered SmartInterview Portal</h5>
+        </div>
+      </header>
+
+      <main className="container py-4">
+        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          <div className="mb-4">
+            <div className="d-flex justify-content-between mb-2">
+              <span>
+                Question {currentQuestion + 1} of {questions.length}
+              </span>
+              <span className="text-primary fw-semibold">{Math.round(progress)}% Complete</span>
+            </div>
+            <div className="progress" style={{ height: "12px" }}>
+              <div
+                className="progress-bar bg-primary"
+                style={{ width: `${progress}%`, transition: "width 0.3s ease" }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="card shadow-lg border-0 mb-4">
+            <div className="card-body p-4">
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <span className="badge bg-primary px-3 py-2">
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </span>
+                <button
+                  onClick={speakQuestion}
+                  className={`btn btn-sm ${isSpeaking ? "btn-primary" : "btn-outline-primary"}`}
+                  style={{ borderRadius: "50%", transition: "all 0.3s ease" }}
+                  onMouseEnter={(e) => (e.target.style.transform = "scale(1.2)")}
+                  onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                >
+                  🔊
+                </button>
+              </div>
+
+              <h4 className="mb-4">{questions[currentQuestion].question}</h4>
+
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="form-label fw-semibold mb-0">Your Answer:</label>
+                  <button
+                    onClick={toggleRecording}
+                    className={`btn btn-sm ${isRecording ? "btn-danger pulse" : "btn-primary"}`}
+                    style={{ transition: "all 0.3s ease" }}
+                    onMouseEnter={(e) => (e.target.style.transform = "scale(1.08)")}
+                    onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                  >
+                    {isRecording ? "🔴 Recording..." : " Voice Input"}
+                  </button>
+                </div>
+
+                <textarea
+                  value={answers[currentQuestion]}
+                  onChange={(e) => handleAnswerChange(e.target.value)}
+                  placeholder="Type your answer here or use voice input..."
+                  className="form-control"
+                  rows={8}
+                  style={{ resize: "none", borderRadius: "10px", border: "1px solid #ccc", transition: "all 0.3s ease" }}
+                  onFocus={(e) => (e.target.style.boxShadow = "0 0 10px rgba(33,150,243,0.5)")}
+                  onBlur={(e) => (e.target.style.boxShadow = "none")}
+                />
+
+                <div className="d-flex justify-content-between align-items-center mt-2">
+                  <small className={`text-muted ${wordCount < MIN_WORDS ? 'text-danger' : 'text-success'}`}>
+                    Word Count: {wordCount} (Min: {MIN_WORDS})
+                  </small>
+                </div>
+                
+                {showValidation && validationMessage && (
+                    <div className="alert alert-danger mt-2">
+                        {validationMessage}
+                    </div>
+                )}
+              </div>
+
+              <div className="d-flex justify-content-between">
+                <button
+                  onClick={handlePrevious}
+                  className="btn btn-outline-primary fw-semibold px-4 py-2"
+                  disabled={currentQuestion === 0}
+                  style={{ transition: "all 0.3s ease", opacity: currentQuestion === 0 ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (currentQuestion !== 0) { e.target.style.transform = "scale(1.08)"; e.target.style.backgroundColor = "#2196F3"; e.target.style.color = "white"; } }}
+                  onMouseLeave={(e) => { e.target.style.transform = "scale(1)"; e.target.style.backgroundColor = ""; e.target.style.color = ""; }}
+                >
+                  ← Previous
+                </button>
+
+                {currentQuestion === questions.length - 1 ? (
+                  <button
+                    onClick={handleSubmit}
+                    className="btn btn-success fw-semibold px-4 py-2"
+                    disabled={isSubmitting}
+                    style={{ background: "linear-gradient(90deg, #43A047, #66BB6A)", border: "none", transition: "all 0.3s ease" }}
+                    onMouseEnter={(e) => (e.target.style.transform = "scale(1.08)")}
+                    onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit Interview"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleNext}
+                    className="btn btn-primary fw-semibold px-4 py-2"
+                    style={{ background: "linear-gradient(90deg, #2196F3, #21CBF3)", border: "none", transition: "all 0.3s ease" }}
+                    onMouseEnter={(e) => (e.target.style.transform = "scale(1.08)")}
+                    onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                  >
+                    Next →
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
