@@ -91,10 +91,14 @@
 
 
 // src/api/ai.js
+// ✅ CORRECT CODE in ai.js
 
-// Base URL for the Express server running on port 5000
-const API_BASE_URL = "http://localhost:5000/api/ai";
+// 1. Access the Vercel Environment Variable (which holds your Render URL)
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
+// 2. Construct the full API base URL using the variable
+// Note: We only add the '/api/ai' part here, as the NEXT_PUBLIC_BACKEND_URL should contain the full domain.
+const API_BASE_URL = `${BACKEND_URL}/api/ai`;
 export const getInitialQuestions = async (role) => {
   if (!role) return [];
 
