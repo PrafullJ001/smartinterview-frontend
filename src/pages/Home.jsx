@@ -18,13 +18,20 @@ export default function Home({ onGetStarted, onLogin, onRegister }) {
     try {
       const { user, idToken } = await signInWithGoogle();
       console.log("✅ Authentication successful! Sending token to backend...");
+// ✅ CORRECT CODE (Uses the Vercel Environment Variable)
 
-      const backendResponse = await fetch("http://localhost:5000/api/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
+// 1. Get the value of the environment variable set in Vercel
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL; 
+// console.log('Attempting to contact backend at:', backendUrl); // A good line to temporarily add for debugging!
 
+// 2. Use a template literal to construct the full URL
+const response = await fetch(`${backendUrl}/api/auth/google`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ token: googleToken }),
+});
       if (!backendResponse.ok) {
         const errorData = await backendResponse.json();
         throw new Error(errorData.error || "Backend verification failed.");
