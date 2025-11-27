@@ -95,10 +95,6 @@
 // Base URL for the Express server running on port 5000
 const API_BASE_URL = "http://localhost:5000/api/ai";
 
-/**
- * Fetches the initial set of questions from the backend.
- */
-// 🟢 CRITICAL FIX: Ensure 'export' is used
 export const getInitialQuestions = async (role) => {
   if (!role) return [];
 
@@ -115,10 +111,7 @@ export const getInitialQuestions = async (role) => {
   }
 };
 
-/**
- * Submits user answers to the backend for AI feedback.
- */
-// 🟢 CRITICAL FIX: Ensure 'export' is used
+
 export const getAIResults = async (userId, role, userAnswers) => {
   try {
     if (!Array.isArray(userAnswers) || userAnswers.length === 0) {
